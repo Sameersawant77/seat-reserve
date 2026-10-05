@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: reserve-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /readyz
+    envVars:
+      - key: AUTH_HMAC_SECRET
+        generateValue: true
+      - key: HOLD_TTL_SECONDS
+        value: "120"
+      - key: PER_USER_LIMIT
+        value: "4"
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: reserve-db
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: reserve-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: reserve-db
+          property: password
+
+databases:
+  - name: reserve-db
+    plan: free
+    databaseName: reserve
+    user: reserve
