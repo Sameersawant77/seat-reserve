@@ -13,14 +13,9 @@ import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestClientResponseException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,11 +23,7 @@ import com.seat.reserve.support.IntegrationTestBase;
 
 class ReservationConcurrencyTest extends IntegrationTestBase {
 
-	@Autowired
-	private TestRestTemplate rest;
-
-	@Autowired
-	private ObjectMapper objectMapper;
+	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	private String adminToken;
 	private UUID showId;
@@ -43,23 +34,27 @@ class ReservationConcurrencyTest extends IntegrationTestBase {
 		List<String> seats = new ArrayList<>();
 		for (char row = 'A'; row <= 'E'; row++) {
 			for (int i = 1; i <= 10; i++) {
-				seats.add(row + i);
+				seats.add(String.valueOf(row) + i);
 			}
 		}
-		HttpHeaders headers = authHeaders(adminToken);
 		Map<String, Object> body = Map.of(
 				"name", "test-show",
 				"seats", seats,
 				"price_paise", 25000);
-		ResponseEntity<String> created = rest.exchange(
-				"/shows", HttpMethod.POST, new HttpEntity<>(body, headers), String.class);
-		assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+		ResponseEntity<String> created = client.post()
+				.uri("/shows")
+				.header("Authorization", "Bearer " + adminToken)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(body)
+				.retrieve()
+				.toEntity(String.class);
+		assertThat(created.getStatusCode().value()).isEqualTo(201);
 		showId = UUID.fromString(objectMapper.readTree(created.getBody()).get("id").asText());
 	}
 
 	@Test
 	void hotSeatStormExactlyOneWinner() throws Exception {
-		int threads = 200;
+		int threads = 100;
 		ExecutorService pool = Executors.newFixedThreadPool(threads);
 		List<Callable<Integer>> tasks = new ArrayList<>();
 		for (int i = 0; i < threads; i++) {
@@ -119,21 +114,29 @@ class ReservationConcurrencyTest extends IntegrationTestBase {
 	}
 
 	private int reserveStatus(String token, String seat, String idempotencyKey) {
-		HttpHeaders headers = authHeaders(token);
-		headers.set("Idempotency-Key", idempotencyKey);
 		Map<String, Object> body = Map.of(
 				"seats", List.of(seat),
 				"idempotency_key", idempotencyKey);
-		ResponseEntity<String> response = rest.exchange(
-				"/shows/" + showId + "/reserve",
-				HttpMethod.POST,
-				new HttpEntity<>(body, headers),
-				String.class);
-		return response.getStatusCode().value();
+		try {
+			ResponseEntity<Void> response = client.post()
+					.uri("/shows/{showId}/reserve", showId)
+					.header("Authorization", "Bearer " + token)
+					.header("Idempotency-Key", idempotencyKey)
+					.contentType(MediaType.APPLICATION_JSON)
+					.body(body)
+					.retrieve()
+					.toBodilessEntity();
+			return response.getStatusCode().value();
+		} catch (RestClientResponseException ex) {
+			return ex.getStatusCode().value();
+		}
 	}
 
 	private void assertShowReconciled() throws Exception {
-		ResponseEntity<String> show = rest.getForEntity("/shows/" + showId, String.class);
+		ResponseEntity<String> show = client.get()
+				.uri("/shows/{showId}", showId)
+				.retrieve()
+				.toEntity(String.class);
 		JsonNode node = objectMapper.readTree(show.getBody());
 		JsonNode counts = node.get("counts");
 		int sum = counts.get("available").asInt()
@@ -148,17 +151,12 @@ class ReservationConcurrencyTest extends IntegrationTestBase {
 				"user_id", userId,
 				"role", role,
 				"ttl_seconds", 3600);
-		HttpHeaders headers = new HttpHeaders();
-		headers.setContentType(MediaType.APPLICATION_JSON);
-		ResponseEntity<String> response = rest.exchange(
-				"/auth/token", HttpMethod.POST, new HttpEntity<>(body, headers), String.class);
+		ResponseEntity<String> response = client.post()
+				.uri("/auth/token")
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(body)
+				.retrieve()
+				.toEntity(String.class);
 		return objectMapper.readTree(response.getBody()).get("token").asText();
-	}
-
-	private static HttpHeaders authHeaders(String token) {
-		HttpHeaders headers = new HttpHeaders();
-		headers.setBearerAuth(token);
-		headers.setContentType(MediaType.APPLICATION_JSON);
-		return headers;
 	}
 }

@@ -8,5 +8,5 @@ import jakarta.validation.constraints.NotNull;
 public record TokenRequest(
 		@NotBlank String userId,
 		@NotNull Role role,
-		long ttlSeconds) {
+		Long ttlSeconds) {
 }

@@ -21,7 +21,7 @@ public class AuthController {
 
 	@PostMapping("/auth/token")
 	public TokenResponse mint(@Valid @RequestBody TokenRequest request) {
-		long ttl = request.ttlSeconds() > 0 ? request.ttlSeconds() : 3600;
+		long ttl = request.ttlSeconds() != null && request.ttlSeconds() > 0 ? request.ttlSeconds() : 3600;
 		return new TokenResponse(tokenService.mint(request.userId(), request.role(), ttl));
 	}
 }

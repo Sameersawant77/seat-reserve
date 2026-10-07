@@ -43,6 +43,18 @@ public class SeatRepository {
 		return jdbc.query("SELECT * FROM seats WHERE show_id = ? ORDER BY label", MAPPER, showId);
 	}
 
+	public void acquireUserShowLock(UUID showId, String userId) {
+		jdbc.execute("SELECT pg_advisory_xact_lock(?)", (org.springframework.jdbc.core.PreparedStatementCallback<Void>) ps -> {
+			ps.setLong(1, advisoryKey(showId, userId));
+			ps.execute();
+			return null;
+		});
+	}
+
+	private static long advisoryKey(UUID showId, String userId) {
+		return ((long) showId.hashCode() << 32) ^ (userId.hashCode() & 0xffffffffL);
+	}
+
 	public List<SeatRecord> lockSeatsForUpdate(UUID showId, List<String> labels) {
 		if (labels.isEmpty()) {
 			return List.of();

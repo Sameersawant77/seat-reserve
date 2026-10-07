@@ -33,21 +33,18 @@ public class ReservationService {
 	private final ReservationRepository reservationRepository;
 	private final IdempotencyRepository idempotencyRepository;
 	private final ReservationMetrics metrics;
-	private final ShowService showService;
 
 	public ReservationService(
 			ShowRepository showRepository,
 			SeatRepository seatRepository,
 			ReservationRepository reservationRepository,
 			IdempotencyRepository idempotencyRepository,
-			ReservationMetrics metrics,
-			ShowService showService) {
+			ReservationMetrics metrics) {
 		this.showRepository = showRepository;
 		this.seatRepository = seatRepository;
 		this.reservationRepository = reservationRepository;
 		this.idempotencyRepository = idempotencyRepository;
 		this.metrics = metrics;
-		this.showService = showService;
 	}
 
 	@Transactional
@@ -68,6 +65,7 @@ public class ReservationService {
 
 		try {
 			Instant now = Instant.now();
+			seatRepository.acquireUserShowLock(showId, userId);
 			List<SeatRecord> locked = seatRepository.lockSeatsForUpdate(showId, seats);
 			if (locked.size() != seats.size()) {
 				throw new ApiException(ErrorCode.SEAT_TAKEN, "One or more seats do not exist");
@@ -99,7 +97,6 @@ public class ReservationService {
 
 			idempotencyRepository.complete(userId, idempotencyKey, reservationId);
 			metrics.recordHeld();
-			showService.getShow(showId);
 			return toResponse(reservation, seats);
 		} catch (ApiException ex) {
 			metrics.recordDecline(ex.code());
@@ -142,7 +139,6 @@ public class ReservationService {
 		}
 		reservationRepository.updateStatus(reservationId, ReservationStatus.CONFIRMED);
 		metrics.recordConfirmed();
-		showService.getShow(reservation.showId());
 		ReservationRecord confirmed = new ReservationRecord(
 				reservation.id(), reservation.showId(), reservation.userId(),
 				ReservationStatus.CONFIRMED, reservation.amountPaise());
@@ -161,7 +157,6 @@ public class ReservationService {
 		}
 		seatRepository.releaseSeats(reservationId, userId);
 		reservationRepository.updateStatus(reservationId, ReservationStatus.CANCELLED);
-		showService.getShow(reservation.showId());
 		List<String> labels = seatRepository.labelsForReservation(reservationId);
 		ReservationRecord cancelled = new ReservationRecord(
 				reservation.id(), reservation.showId(), reservation.userId(),

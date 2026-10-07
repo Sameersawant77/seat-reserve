@@ -65,15 +65,29 @@ Multi-seat reserve is **all-or-nothing**: if any seat is unavailable, the reques
 - Readiness (DB checked): `GET /readyz`
 - Prometheus: `GET /actuator/prometheus`
 
+## Build & test
+
+Gradle 9 requires **JDK 17+** to run the wrapper (the app targets **Java 21**). On Windows PowerShell:
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"
+.\gradlew.bat build
+```
+
+(`gradle.properties` may set `org.gradle.java.home` for local builds.)
+
 ## Burst test
 
-Requires `bash`, `curl`, `python3`, and a running API:
+Requires **bash**, **curl**, and a running API (`jq` optional for nicer JSON output):
 
 ```bash
-bash burst.sh http://localhost:8080 200 500
-# or
-make burst BASE_URL=http://localhost:8080
+bash burst.sh http://localhost:8080 200 500 32
+# BASE_URL  CONCURRENCY  HOT_USERS  MAX_PARALLEL(curl workers)
 ```
+
+Or: `make burst BASE_URL=http://localhost:8080`
+
+Exit code `0` when hot seat A12 has **exactly one** `201`, there are **no 5xx** responses, and show state **reconciles**.
 
 Prints HTTP outcome distribution, reconciliation from `GET /shows/{id}`, and a metrics snapshot.
 
