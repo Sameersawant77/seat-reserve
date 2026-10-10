@@ -14,7 +14,7 @@ services:
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
           name: reserve-db
-          property: connectionString
+          property: jdbcUrl
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
           name: reserve-db
