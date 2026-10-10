@@ -11,10 +11,18 @@ services:
         value: "120"
       - key: PER_USER_LIMIT
         value: "4"
-      - key: SPRING_DATASOURCE_URL
+      - key: DB_HOST
         fromDatabase:
           name: reserve-db
-          property: jdbcUrl
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: reserve-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: reserve-db
+          property: database
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
           name: reserve-db
